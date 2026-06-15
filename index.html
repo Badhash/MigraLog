@@ -134,7 +134,8 @@
   .entry-note{font-size:.85rem;color:var(--text-dim);margin-top:10px;font-style:italic;line-height:1.45}
   .del{
     background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:1.1rem;
-    padding:4px 6px;border-radius:8px;flex:none;line-height:1;transition:color .15s;
+    width:40px;height:40px;margin:-6px -8px -6px 0;border-radius:10px;flex:none;line-height:1;
+    display:grid;place-items:center;transition:color .15s;
   }
   .del:hover,.del:focus-visible{color:var(--terra)}
 
@@ -266,7 +267,7 @@
 
 <!-- Sheet -->
 <div class="scrim" id="scrim" aria-hidden="true"></div>
-<form class="sheet" id="sheet" novalidate role="dialog" aria-modal="true" aria-labelledby="sheetTitle" aria-hidden="true" tabindex="-1">
+<form class="sheet" id="sheet" novalidate role="dialog" aria-modal="true" aria-labelledby="sheetTitle" aria-hidden="true" tabindex="-1" inert>
   <div class="grabber"></div>
   <h2 id="sheetTitle">Nouvelle crise</h2>
   <p class="hint">Remplis ce que tu peux. Seule l'intensité suffit pour enregistrer.</p>
@@ -403,7 +404,7 @@
   }
 
   // Sheet controls
-  const scrim=$("#scrim"),sheet=$("#sheet");
+  const scrim=$("#scrim"),sheet=$("#sheet"),wrap=$(".wrap");
   let lastFocus=null;
   function openSheet(){
     const now=new Date();
@@ -417,12 +418,15 @@
     lastFocus=document.activeElement;
     lockScroll();syncVV();
     scrim.classList.add("open");sheet.classList.add("open");
-    scrim.setAttribute("aria-hidden","false");sheet.setAttribute("aria-hidden","false");
+    // background becomes inert (not focusable / hidden from assistive tech)
+    wrap.setAttribute("inert","");scrim.setAttribute("aria-hidden","false");
+    sheet.removeAttribute("inert");sheet.setAttribute("aria-hidden","false");
     sheet.focus({preventScroll:true});
   }
   function closeSheet(){
     scrim.classList.remove("open");sheet.classList.remove("open");
-    scrim.setAttribute("aria-hidden","true");sheet.setAttribute("aria-hidden","true");
+    sheet.setAttribute("inert","");sheet.setAttribute("aria-hidden","true");
+    wrap.removeAttribute("inert");scrim.setAttribute("aria-hidden","true");
     unlockScroll();
     root.style.setProperty("--kb","0px");
     if(lastFocus&&lastFocus.focus)lastFocus.focus({preventScroll:true});
@@ -441,10 +445,11 @@
   // Save
   sheet.onsubmit=e=>{
     e.preventDefault();
+    const now=new Date();
     const entry={
       id:Date.now(),
-      date:$("#f-date").value,
-      time:$("#f-time").value,
+      date:$("#f-date").value||localDate(now),
+      time:$("#f-time").value||now.toTimeString().slice(0,5),
       intensity:state.intensity,
       triggers:[...state.triggers],
       meds:[...state.meds],
@@ -462,6 +467,7 @@
   }
 
   function del(id){
+    if(!confirm("Supprimer cette crise ?"))return;
     save(load().filter(e=>e.id!==id));render();toast("Crise supprimée");
   }
   window.__del=del;
