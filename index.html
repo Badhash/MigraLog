@@ -189,7 +189,7 @@
     transform:translateY(110%);transition:transform .36s var(--ease);
     /* fit above the on-screen keyboard when it's open (visualViewport) */
     max-height:min(92dvh,calc(var(--vvh,100dvh) - 12px));
-    overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+    overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
     padding:8px 20px calc(24px + env(safe-area-inset-bottom));
     box-shadow:0 -10px 40px rgba(0,0,0,.4);
   }
@@ -208,9 +208,9 @@
   }
   .intensity-num{font-family:Fraunces,serif;font-size:2.6rem;font-weight:600;line-height:1;transition:color .2s}
   .intensity-word{font-size:.9rem;color:var(--text-dim)}
-  .scale{display:grid;grid-template-columns:repeat(11,1fr);gap:5px}
+  .scale{display:grid;grid-template-columns:repeat(11,1fr);gap:5px;width:100%}
   .scale button{
-    aspect-ratio:1;border:none;border-radius:10px;cursor:pointer;
+    aspect-ratio:1;border:none;border-radius:10px;cursor:pointer;min-width:0;
     background:var(--surface-2);color:var(--text-faint);font-family:inherit;font-weight:600;font-size:.8rem;
     transition:transform .14s var(--ease),background .14s,color .14s,box-shadow .14s;
     min-height:40px;
@@ -234,15 +234,16 @@
 
   /* Inputs — font-size:16px prevents iOS auto-zoom on focus */
   textarea,input[type=text],select{
-    width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);
+    width:100%;max-width:100%;min-width:0;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);
     color:var(--text);font-family:inherit;font-size:16px;padding:14px;resize:vertical;
     transition:border-color .16s;
   }
   textarea:focus,input:focus,select:focus{outline:none;border-color:var(--sage)}
   textarea{min-height:80px;line-height:1.5}
   .when-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .when-row>*{min-width:0}
   input[type=date],input[type=time]{
-    width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);
+    width:100%;max-width:100%;min-width:0;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);
     color:var(--text);font-family:inherit;font-size:16px;padding:13px 14px;
     color-scheme:dark;min-height:var(--tap);-webkit-appearance:none;appearance:none;
   }
