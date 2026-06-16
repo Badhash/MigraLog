@@ -1,6 +1,6 @@
 // Service worker du Journal des migraines
 // Stratégie : cache-first avec mise à jour en arrière-plan (stale-while-revalidate).
-const CACHE = "migralog-v3";
+const CACHE = "migralog-v4";
 const ASSETS = [
   "./",
   "./index.html",

@@ -138,6 +138,42 @@
     display:grid;place-items:center;transition:color .15s;
   }
   .del:hover,.del:focus-visible{color:var(--terra)}
+  .entry{cursor:pointer}
+  .entry:active{background:var(--surface-2)}
+
+  /* ---------- Dashboard / Tendances ---------- */
+  .dash{margin-bottom:4px}
+  .dash-locked{
+    text-align:center;color:var(--text-faint);font-size:.85rem;
+    border:1px dashed var(--line);border-radius:var(--radius);padding:18px;margin-bottom:24px;
+  }
+  .insight{
+    background:linear-gradient(135deg,rgba(123,165,160,.14),rgba(201,139,107,.10));
+    border:1px solid var(--line);border-radius:var(--radius);padding:15px 17px;margin-bottom:12px;
+    font-size:.9rem;color:var(--text);display:flex;gap:11px;align-items:flex-start;line-height:1.45;
+  }
+  .insight .ic{color:var(--sage);font-size:1rem;flex:none;margin-top:1px}
+  .insight b{color:var(--sage);font-weight:600}
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+  .metric{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px}
+  .metric .mv{font-family:Fraunces,serif;font-size:1.9rem;font-weight:500;line-height:1}
+  .metric .ml{font-size:.68rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;margin-top:8px}
+  .dash-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:12px}
+  .dash-card h3{font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-faint);font-weight:600;margin-bottom:18px}
+  .dash-empty{color:var(--text-faint);font-size:.85rem}
+  .vbars{display:flex;align-items:flex-end;gap:8px}
+  .vbar{flex:1;display:flex;flex-direction:column;align-items:center;min-width:0}
+  .vbar .bv{font-size:.8rem;color:var(--text-dim);font-weight:600;margin-bottom:6px;font-family:Fraunces,serif}
+  .vbar .bar{width:100%;max-width:36px;border-radius:6px 6px 0 0;min-height:3px;
+    background:linear-gradient(180deg,var(--sage),var(--sage-dim));transition:height .5s var(--ease)}
+  .vbar .bar-terra{background:linear-gradient(180deg,var(--terra),var(--terra-dim))}
+  .vbar .bl{font-size:.6rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:.03em;margin-top:8px;text-align:center;white-space:nowrap}
+  .hbars{display:flex;flex-direction:column;gap:13px}
+  .hbar{display:grid;grid-template-columns:92px 1fr 24px;align-items:center;gap:10px}
+  .hbar .hl{font-size:.82rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hbar .track{height:8px;background:var(--surface-2);border-radius:999px;overflow:hidden}
+  .hbar .fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--sage-dim),var(--sage));transition:width .5s var(--ease)}
+  .hbar .hv{font-size:.78rem;color:var(--text-faint);font-weight:600;text-align:right}
 
   /* ---------- Sheet / modal ---------- */
   .scrim{
@@ -261,6 +297,8 @@
     Nouvelle crise
   </button>
 
+  <div class="dash" id="dash"></div>
+
   <div class="section-label">Historique</div>
   <div id="list"></div>
 </div>
@@ -270,7 +308,7 @@
 <form class="sheet" id="sheet" novalidate role="dialog" aria-modal="true" aria-labelledby="sheetTitle" aria-hidden="true" tabindex="-1" inert>
   <div class="grabber"></div>
   <h2 id="sheetTitle">Nouvelle crise</h2>
-  <p class="hint">Remplis ce que tu peux. Seule l'intensité suffit pour enregistrer.</p>
+  <p class="hint" id="sheetHint">Remplis ce que tu peux. Seule l'intensité suffit pour enregistrer.</p>
 
   <div class="field">
     <label>Quand ?</label>
@@ -361,7 +399,8 @@
     items.forEach(t=>{
       const c=document.createElement("button");
       c.type="button";c.className="chip"+(med?" med":"");
-      c.innerHTML='<span class="check">✓</span>'+t;
+      c.dataset.val=t;
+      c.innerHTML='<span class="check">✓</span>'+esc(t);
       c.onclick=()=>{
         if(store.has(t)){store.delete(t);c.classList.remove("on")}
         else{store.add(t);c.classList.add("on")}
@@ -371,6 +410,11 @@
   }
   buildChips($("#triggers"),TRIGGERS,state.triggers,false);
   buildChips($("#meds"),MEDS,state.meds,true);
+  // Reflect the current selection (state Sets) onto the chip buttons
+  function syncChipUI(){
+    document.querySelectorAll("#triggers .chip").forEach(c=>c.classList.toggle("on",state.triggers.has(c.dataset.val)));
+    document.querySelectorAll("#meds .chip").forEach(c=>c.classList.toggle("on",state.meds.has(c.dataset.val)));
+  }
 
   // Local YYYY-MM-DD (avoids the UTC off-by-one near midnight)
   function localDate(d){return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
@@ -405,15 +449,30 @@
 
   // Sheet controls
   const scrim=$("#scrim"),sheet=$("#sheet"),wrap=$(".wrap");
-  let lastFocus=null;
-  function openSheet(){
-    const now=new Date();
-    $("#f-date").value=localDate(now);
-    $("#f-time").value=now.toTimeString().slice(0,5);
-    setIntensity(5);
+  const sheetTitle=$("#sheetTitle"),sheetHint=$("#sheetHint");
+  let lastFocus=null,editingId=null;
+
+  // entry = existing record to edit, or undefined for a new one
+  function openSheet(entry){
+    editingId=entry?entry.id:null;
+    sheetTitle.textContent=entry?"Modifier la crise":"Nouvelle crise";
+    sheetHint.textContent=entry?"Ajuste les informations puis enregistre.":"Remplis ce que tu peux. Seule l'intensité suffit pour enregistrer.";
     state.triggers.clear();state.meds.clear();
-    $("#f-note").value="";
-    document.querySelectorAll(".chip.on").forEach(c=>c.classList.remove("on"));
+    const now=new Date();
+    if(entry){
+      $("#f-date").value=entry.date||localDate(now);
+      $("#f-time").value=entry.time||now.toTimeString().slice(0,5);
+      setIntensity(typeof entry.intensity==="number"?entry.intensity:5);
+      (entry.triggers||[]).forEach(t=>state.triggers.add(t));
+      (entry.meds||[]).forEach(m=>state.meds.add(m));
+      $("#f-note").value=entry.note||"";
+    }else{
+      $("#f-date").value=localDate(now);
+      $("#f-time").value=now.toTimeString().slice(0,5);
+      setIntensity(5);
+      $("#f-note").value="";
+    }
+    syncChipUI();
     sheet.scrollTop=0;
     lastFocus=document.activeElement;
     lockScroll();syncVV();
@@ -429,6 +488,7 @@
     wrap.removeAttribute("inert");scrim.setAttribute("aria-hidden","true");
     unlockScroll();
     root.style.setProperty("--kb","0px");
+    editingId=null;
     if(lastFocus&&lastFocus.focus)lastFocus.focus({preventScroll:true});
   }
   // Keep a focused field visible above the keyboard
@@ -437,17 +497,16 @@
       setTimeout(()=>e.target.scrollIntoView({block:"center",behavior:"smooth"}),300);
     }
   });
-  $("#openBtn").onclick=openSheet;
+  $("#openBtn").onclick=()=>openSheet();
   $("#cancelBtn").onclick=closeSheet;
   scrim.onclick=closeSheet;
   document.addEventListener("keydown",e=>{if(e.key==="Escape"&&sheet.classList.contains("open"))closeSheet()});
 
-  // Save
+  // Save (create or update)
   sheet.onsubmit=e=>{
     e.preventDefault();
     const now=new Date();
-    const entry={
-      id:Date.now(),
+    const fields={
       date:$("#f-date").value||localDate(now),
       time:$("#f-time").value||now.toTimeString().slice(0,5),
       intensity:state.intensity,
@@ -455,8 +514,17 @@
       meds:[...state.meds],
       note:$("#f-note").value.trim()
     };
-    const data=load();data.push(entry);save(data);
-    closeSheet();render();toast("Crise enregistrée");
+    const data=load();
+    let msg="Crise enregistrée";
+    if(editingId!=null){
+      const idx=data.findIndex(x=>x.id===editingId);
+      if(idx>-1){data[idx]=Object.assign({},data[idx],fields);msg="Crise modifiée"}
+      else data.push(Object.assign({id:Date.now()},fields));
+    }else{
+      data.push(Object.assign({id:Date.now()},fields));
+    }
+    save(data);
+    closeSheet();render();toast(msg);
   };
 
   // Toast
@@ -472,6 +540,12 @@
   }
   window.__del=del;
 
+  function edit(id){
+    const entry=load().find(e=>e.id===id);
+    if(entry)openSheet(entry);
+  }
+  window.__edit=edit;
+
   // Stats
   function refreshStats(data){
     const now=new Date(),m=now.getMonth(),y=now.getFullYear();
@@ -486,10 +560,76 @@
     $("#stat-last").textContent=days<=0?"auj.":days+" j";
   }
 
+  // Dashboard / Tendances
+  const MIN_FOR_DASH=5;
+  const BUCKETS=[["Nuit",0,5,"la nuit"],["Matin",6,11,"le matin"],["Aprèm",12,17,"l'après-midi"],["Soir",18,23,"le soir"]];
+  function renderDashboard(data){
+    const host=$("#dash");
+    if(data.length<MIN_FOR_DASH){
+      if(data.length>0){
+        const left=MIN_FOR_DASH-data.length;
+        host.innerHTML=`<div class="dash-locked">✦ Encore ${left} crise${left>1?"s":""} pour débloquer tes tendances</div>`;
+      }else host.innerHTML="";
+      return;
+    }
+    const now=new Date();
+    const avg=data.reduce((s,e)=>s+(+e.intensity||0),0)/data.length;
+    const dates=data.map(e=>new Date(e.date+"T"+(e.time||"00:00"))).sort((a,b)=>a-b);
+    const first=dates[0];
+    const spanM=Math.max(1,(now.getFullYear()-first.getFullYear())*12+(now.getMonth()-first.getMonth())+1);
+    const perMonth=data.length/spanM;
+
+    // Crises par mois (6 derniers)
+    const months=[];
+    for(let i=5;i>=0;i--)months.push(new Date(now.getFullYear(),now.getMonth()-i,1));
+    const mcounts=months.map(d=>data.filter(e=>{const x=new Date(e.date+"T00:00");return x.getFullYear()===d.getFullYear()&&x.getMonth()===d.getMonth()}).length);
+    const mmax=Math.max(1,...mcounts);
+    const mbars=months.map((d,i)=>{
+      const h=mcounts[i]?Math.round(8+88*mcounts[i]/mmax):3;
+      const lbl=d.toLocaleDateString("fr-FR",{month:"short"}).replace(".","");
+      return `<div class="vbar"><div class="bv">${mcounts[i]}</div><div class="bar bar-terra" style="height:${h}px"></div><div class="bl">${lbl}</div></div>`;
+    }).join("");
+
+    // Déclencheurs fréquents (top 5)
+    const tf={};data.forEach(e=>(e.triggers||[]).forEach(t=>tf[t]=(tf[t]||0)+1));
+    const ttop=Object.entries(tf).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const tmax=Math.max(1,...ttop.map(x=>x[1]));
+    const tbars=ttop.length
+      ?ttop.map(([k,v])=>`<div class="hbar"><div class="hl">${esc(k)}</div><div class="track"><div class="fill" style="width:${Math.round(100*v/tmax)}%"></div></div><div class="hv">${v}</div></div>`).join("")
+      :`<div class="dash-empty">Aucun déclencheur renseigné pour l'instant.</div>`;
+
+    // Moment de la journée
+    const bcounts=BUCKETS.map(([n,a,b])=>data.filter(e=>{const h=parseInt((e.time||"").slice(0,2),10);return h>=a&&h<=b}).length);
+    const bmax=Math.max(1,...bcounts);
+    const bbars=BUCKETS.map(([n],i)=>{
+      const h=bcounts[i]?Math.round(8+88*bcounts[i]/bmax):3;
+      return `<div class="vbar"><div class="bv">${bcounts[i]}</div><div class="bar" style="height:${h}px"></div><div class="bl">${n}</div></div>`;
+    }).join("");
+
+    // Insight
+    const parts=[];
+    if(ttop[0]&&ttop[0][1]>=2)parts.push(`Ton déclencheur le plus fréquent est <b>${esc(ttop[0][0])}</b> (${ttop[0][1]} crises).`);
+    const bestB=Math.max(...bcounts);
+    if(bestB>0)parts.push(`Tes crises surviennent surtout <b>${BUCKETS[bcounts.indexOf(bestB)][3]}</b>.`);
+    const insight=parts.length?`<div class="insight"><span class="ic">✦</span><div>${parts.join(" ")}</div></div>`:"";
+
+    host.innerHTML=`
+      <div class="section-label">Tendances</div>
+      ${insight}
+      <div class="metrics">
+        <div class="metric"><div class="mv" style="color:${scaleColor(Math.round(avg))}">${avg.toFixed(1)}</div><div class="ml">intensité moyenne</div></div>
+        <div class="metric"><div class="mv">${perMonth.toFixed(1)}</div><div class="ml">crises / mois</div></div>
+      </div>
+      <div class="dash-card"><h3>Crises par mois</h3><div class="vbars">${mbars}</div></div>
+      <div class="dash-card"><h3>Déclencheurs fréquents</h3><div class="hbars">${tbars}</div></div>
+      <div class="dash-card"><h3>Moment de la journée</h3><div class="vbars">${bbars}</div></div>`;
+  }
+
   // Render list
   function render(){
     const data=load().sort((a,b)=>new Date(b.date+"T"+(b.time||"00:00"))-new Date(a.date+"T"+(a.time||"00:00")));
     refreshStats(data);
+    renderDashboard(data);
     const list=$("#list");
     if(!data.length){
       list.innerHTML='<div class="empty"><div class="ico">○</div><p>Aucune crise enregistrée.<br>Touche « Nouvelle crise » dès que ça commence.</p></div>';
@@ -503,6 +643,9 @@
       const dateStr=d.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"});
       const triggerChips=e.triggers.map(t=>`<span class="chip-tag">${esc(t)}</span>`).join("");
       const medChips=e.meds.filter(m=>m!=="Aucun").map(m=>`<span class="chip-tag med">${esc(m)}</span>`).join("");
+      el.dataset.id=e.id;
+      el.setAttribute("role","button");el.tabIndex=0;
+      el.setAttribute("aria-label","Modifier cette crise");
       el.innerHTML=`
         <div class="dot" style="background:${col}">${e.intensity}</div>
         <div class="entry-body">
@@ -514,10 +657,23 @@
           ${(triggerChips||medChips)?`<div class="chips-row">${triggerChips}${medChips}</div>`:""}
           ${e.note?`<div class="entry-note">${esc(e.note)}</div>`:""}
         </div>
-        <button class="del" aria-label="Supprimer" onclick="__del(${e.id})">✕</button>`;
+        <button class="del" aria-label="Supprimer cette crise">✕</button>`;
       list.appendChild(el);
     });
   }
+
+  // Tap a card to edit, the ✕ to delete (event delegation, keyboard-friendly)
+  const listEl=$("#list");
+  listEl.addEventListener("click",ev=>{
+    const card=ev.target.closest(".entry");if(!card)return;
+    const id=+card.dataset.id;
+    if(ev.target.closest(".del"))del(id);else edit(id);
+  });
+  listEl.addEventListener("keydown",ev=>{
+    if((ev.key==="Enter"||ev.key===" ")&&ev.target.classList.contains("entry")){
+      ev.preventDefault();edit(+ev.target.dataset.id);
+    }
+  });
   function esc(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 
   render();
